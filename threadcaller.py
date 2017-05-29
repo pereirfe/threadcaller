@@ -5,6 +5,8 @@ import sys
 import time
 import json
 from threading import Thread, Semaphore
+import threading
+from socket import gethostname
 
 class Tasksrc:
 
@@ -68,7 +70,7 @@ class Tasksrc:
 
     def getTaskInstance(self):
         for tki in self.taskInstances:
-            if not tki.inst_complete:
+            if not tki.inst_complete and not tki.running:
                 return tki
 
         print "ERROR___EMPTY"
@@ -82,6 +84,12 @@ class TaskInstance(Tasksrc):
         self.inst_complete = False
         self.output_file = output_file
 
+    def getCallS(self):
+        s = ""
+        for x in self.callv:
+            s += x
+            s += " "
+        return s
 
     def getCallV(self):
         return self.callv
@@ -100,27 +108,34 @@ class TaskInstance(Tasksrc):
 def runTask(tki, semaphore):
     semaphore.acquire()
     f = open(tki.getOutputFile(), "w")
-    tki.start()
     call(tki.getCallV(), stdout=f)
     tki.finish()
     f.close()
     semaphore.release()
 
 
-
-def threadcaller(numproc, descriptor):
-
+def threadcaller(numproc, descriptor, report):
     tv = []
     threads = []
+    rp = open(report, "w")
+    host = gethostname()
+    print time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
     print "Starting Descriptor Loading..."
+    print >>rp, time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
+    print >>rp, "Starting Descriptor Loading..."
     with open(descriptor, "r") as infile:
         v = json.load(infile)
 
         for t in v:
-            tv.append(Tasksrc(t))
-            tv[-1].genTaskInstances()
+            src = Tasksrc(t)
+            src.genTaskInstances()
+            tv.append(src)
 
+    print time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
     print "Loaded"
+    print >>rp, time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
+    print >>rp, "Loaded"
+    
     sem = Semaphore(int(numproc))
 
     all_finished = False
@@ -129,14 +144,20 @@ def threadcaller(numproc, descriptor):
         found_task = False
         for t in tv:
             if t.checkReadyness(tv) and (not t.checkCompleteness()) and (not found_task):
-                print time.strftime("%a, %d %b %Y %H:%M:%S +0000:\t", time.localtime()),
-                print "Starting task instance from ID:", t.getTaskID()
-                threads.append(Thread(target = runTask, args = (t.getTaskInstance(), sem)))
-                threads[-1].start()
+                inst = t.getTaskInstance()
+                inst.start()
+
+                print time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
+                print "Starting instance from ID:", t.getTaskID(), "cmd", inst.getCallS()
+                print >>rp, time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
+                print >>rp, "Starting instance from ID:", t.getTaskID(), "cmd", inst.getCallS()
+
+                threadinst = Thread(target = runTask, args = (inst, sem))
+                threadinst.start()
                 found_task = True
                 break
 
-        time.sleep(0.5)
+        time.sleep(2)           # Is this really necessary?
         sem.acquire()           # Block until a task finishes
         sem.release()
 
@@ -144,12 +165,16 @@ def threadcaller(numproc, descriptor):
         for t in tv:
             if not t.checkCompleteness():
                 all_finished = False
-
-
+            
+        if all_finished:
+            print time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
+            print "All Tasks finished", t.getTaskID()
+            print >>rp, time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
+            print >>rp, "All Tasks finished", t.getTaskID()
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print "Usage:", sys.argv[0], "numproc descriptor.json"
+    if len(sys.argv) != 4:
+        print "Usage:", sys.argv[0], "numproc descriptor.json reportfile"
     else:
-        threadcaller(int(sys.argv[1]), sys.argv[2])
+        threadcaller(int(sys.argv[1]), sys.argv[2], sys.argv[3])
