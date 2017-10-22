@@ -108,7 +108,7 @@ class TaskInstance(Tasksrc):
 def runTask(tki, semaphore):
     semaphore.acquire()
     f = open(tki.getOutputFile(), "w")
-    call(tki.getCallV(), stdout=f)
+    call(tki.getCallV(), stdout=f, stderr=f)
     tki.finish()
     f.close()
     semaphore.release()
@@ -145,19 +145,26 @@ def threadcaller(numproc, descriptor, report):
         for t in tv:
             if t.checkReadyness(tv) and (not t.checkCompleteness()) and (not found_task):
                 inst = t.getTaskInstance()
-                inst.start()
+                try:
+                    inst.start()
+                except:
+                    print "SRC FINISHED. Moving ON"
+                    continue
 
                 print time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
                 print "Starting instance from ID:", t.getTaskID(), "cmd", inst.getCallS()
                 print >>rp, time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
                 print >>rp, "Starting instance from ID:", t.getTaskID(), "cmd", inst.getCallS()
-
+                rp.flush()
                 threadinst = Thread(target = runTask, args = (inst, sem))
                 threadinst.start()
                 found_task = True
                 break
 
-        time.sleep(2)           # Is this really necessary?
+        # This pause is necessary to avoid multiple prints
+        # while waiting last processes to run
+        # (TODO: Find a better way to do that)
+        time.sleep(0.2)
         sem.acquire()           # Block until a task finishes
         sem.release()
 
@@ -165,13 +172,14 @@ def threadcaller(numproc, descriptor, report):
         for t in tv:
             if not t.checkCompleteness():
                 all_finished = False
-            
+
         if all_finished:
             print time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
             print "All Tasks finished", t.getTaskID()
             print >>rp, time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
             print >>rp, "All Tasks finished", t.getTaskID()
-
+            rp.close()
+            break
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
