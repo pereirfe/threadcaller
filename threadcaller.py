@@ -8,28 +8,41 @@ from threading import Thread, Semaphore
 import threading
 from socket import gethostname
 
+def make_combinatory_list(opt, s, l):
+    ''' Create a list with all possible parameter combinations
+        Inputs:
+              opt: list of list of possibilities
+                s: string mounted until now
+                l: List to save results.
+
+       This function is recursive.
+    '''
+
+    if len(opt) == 0: # should this exist?
+        return
+
+    if len(opt) == 1: # Base
+        for p in opt[0]:
+            l.append(s+" "+str(p))
+        return
+
+    else:
+        for p in opt[0]:
+            make_combinatory_list(opt[1:], s+" "+str(p), l)
+
+
 class Tasksrc:
 
     def __init__(self, definition):
         self.ID = definition["ID"]
-        self.repetitions = definition["Repetitions"]
-        if  definition["Prereq_ID"] == "None":
-            self.preID = None
-        else:
-            self.preID = definition["Prereq_ID"]
-
         self.path_exec = definition["Path_exec"]
-        self.param_prefix = definition["Param_prefix"]
-        self.var = definition["Param_var"]
-        self.param_posfix = definition["Param_posfix"]
+        self.parameters = definition["Parameters"]
+        self.parameter_names = definition["Param_names"]
         self.of_prefix = definition["Output_file_prefix"]
         self.of_posfix = definition["Output_file_posfix"]
         self.expected_rv = definition["Expected_rv"]  # Unused... For now
 
         self.src_complete = False
-        self.ready = False
-        if self.preID == None:
-            self.ready = True
 
         self.taskInstances = []
 
@@ -39,25 +52,25 @@ class Tasksrc:
 
     def genTaskInstances(self):
 
-        pref = self.param_prefix.split()
-        posf = self.param_posfix.split()
+        if len(self.parameter_names) != len(self.parameters):
+            raise NameError('Descriptor parameters and names doesnt match\n')
 
-        for v in self.var:
-            for i in range(self.repetitions):
-                s = [ self.path_exec ]
-                s += pref
-                s += [str(v)]
-                s += posf
-                o = self.of_prefix + "_" + str(v) + "_IT" + str(i) + "_" + self.of_posfix
-                self.taskInstances.append(TaskInstance(s, o))
+        l = []
+        make_combinatory_list(self.parameters, "", l)
 
+        for inst in l:
+            s = [ self.path_exec ]
+            splitted_inst = inst.split()
+            s += splitted_inst  # Nasty
 
-    def checkReadyness(self, allsrc):
-        self.ready = True
-        for src in allsrc:
-            if src.ID == self.preID and src.src_complete == False:
-                self.ready == False
-        return self.ready
+            o = self.of_prefix
+            for name, param in zip(self.parameter_names, splitted_inst):
+                if name != "":
+                    o += ("_" + str(name) + "_" + param)
+
+            o += self.of_posfix
+            self.taskInstances.append(TaskInstance(s, o))
+
 
 
     def checkCompleteness(self):
@@ -68,13 +81,13 @@ class Tasksrc:
 
         return self.src_complete
 
+
     def getTaskInstance(self):
         for tki in self.taskInstances:
             if not tki.inst_complete and not tki.running:
                 return tki
 
-        print "ERROR___EMPTY"
-        return "NO THREAD"      # A correct way to do that?!
+        return None      # A correct way to do that?!
 
 
 class TaskInstance(Tasksrc):
@@ -135,7 +148,7 @@ def threadcaller(numproc, descriptor, report):
     print "Loaded"
     print >>rp, time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",
     print >>rp, "Loaded"
-    
+
     sem = Semaphore(int(numproc))
 
     all_finished = False
@@ -143,12 +156,12 @@ def threadcaller(numproc, descriptor, report):
     while all_finished == False:
         found_task = False
         for t in tv:
-            if t.checkReadyness(tv) and (not t.checkCompleteness()) and (not found_task):
+            if (not t.checkCompleteness()) and (not found_task):
                 inst = t.getTaskInstance()
                 try:
                     inst.start()
                 except:
-                    print "SRC FINISHED. Moving ON"
+#                    print "SRC FINISHED. Moving ON"
                     continue
 
                 print time.strftime("%a, %d %b %Y %H:%M:%S:\t", time.localtime()), "@"+host+"\t",

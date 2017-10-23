@@ -1,12 +1,14 @@
 [
     {
 	"ID": String:Unique Identifier
-	"Repetitions": int:How many times repeat each execution
-	"Prereq_ID" : String:ID of the required task
 	"Path_exec" : String:Path to executable
-	"Param_prefix": String:Fixed initial part of parameters
-	"Param_var": List: All possible options for the changeable part of the parameters
-	"Param_posfix": String:Fixed final part of parameters
+	"Path_output": .
+	"Parameters":
+	[
+	    [1,2,3],
+	    ['x', 'y', 'z']
+	],
+	"Param_names": ["A", "B"]
 	"Output_file_prefix": String:Fixed initial part of outputfile
 	"Output_file_posfix": String:Fixed final part of outputfile
 	"Expected_rv": int:Expected return value (still not implemented)
