@@ -7,6 +7,7 @@ import json
 from threading import Thread, Semaphore
 import threading
 from socket import gethostname
+import os
 
 def make_combinatory_list(opt, s, l):
     ''' Create a list with all possible parameter combinations
@@ -36,6 +37,14 @@ class Tasksrc:
     def __init__(self, definition):
         self.ID = definition["ID"]
         self.path_exec = definition["Path_exec"]
+        self.path_of = definition["Path_output"]
+
+        if not os.path.isdir(self.path_of):
+            raise ValueError('Output folder does not exist')
+
+        if self.path_of[-1] != '/':
+            self.path_of += '/'
+
         self.parameters = definition["Parameters"]
         self.parameter_names = definition["Param_names"]
         self.of_prefix = definition["Output_file_prefix"]
@@ -63,7 +72,7 @@ class Tasksrc:
             splitted_inst = inst.split()
             s += splitted_inst  # Nasty
 
-            o = self.of_prefix
+            o = self.path_of + self.of_prefix
             for name, param in zip(self.parameter_names, splitted_inst):
                 if name != "":
                     o += ("_" + str(name) + "_" + param)
