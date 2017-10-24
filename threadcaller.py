@@ -12,7 +12,7 @@ def make_combinatory_list(opt, s, l):
     ''' Create a list with all possible parameter combinations
         Inputs:
               opt: list of list of possibilities
-                s: string mounted until now
+                s: string mounted until now (usually called empty)
                 l: List to save results.
 
        This function is recursive.
